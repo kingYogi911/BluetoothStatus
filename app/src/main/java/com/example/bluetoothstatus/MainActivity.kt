@@ -8,9 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
-import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -60,10 +58,13 @@ class MainActivity : ComponentActivity() {
 
     private fun startObserving() {
         lifecycleScope.launch {
-            lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-                bluetoothUtil.status.collectLatest {
-                    viewModel.updateBluetoothStatus(it)
-                }
+            bluetoothUtil.status.collectLatest {
+                viewModel.updateBluetoothStatus(it)
+            }
+        }
+        lifecycleScope.launch {
+            bluetoothUtil.pairedDevices.collectLatest {
+                viewModel.updateBondedDevices(it)
             }
         }
     }

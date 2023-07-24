@@ -4,8 +4,10 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.net.Uri
 import android.provider.Settings
 import androidx.activity.ComponentActivity
@@ -14,6 +16,7 @@ import androidx.activity.result.ActivityResultRegistry
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
+import com.example.bluetoothstatus.MainViewModel
 import com.example.bluetoothstatus.utils.permissionUtil.BluetoothPermissionUtil
 import com.example.bluetoothstatus.utils.permissionUtil.PermissionStatus
 import dagger.hilt.android.qualifiers.ActivityContext
@@ -35,10 +38,41 @@ class BluetoothUtil_Impl @Inject constructor(
     private var onPermissionResult: ((Boolean) -> Unit)? = null
     private var isPermissionRequestedFromAppSettings = false
 
+    private val bluetoothStateReceiver: BroadcastReceiver
 
     init {
         val bluetoothManager = context.getSystemService(BluetoothManager::class.java)
         bluetoothAdapter = bluetoothManager.adapter
+        bluetoothStateReceiver = object : BroadcastReceiver() {
+            @SuppressLint("MissingPermission")
+            override fun onReceive(context: Context, intent: Intent) {
+                val action = intent.action
+
+                if (action == BluetoothAdapter.ACTION_STATE_CHANGED) {
+                    val state =
+                        intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
+
+                    when (state) {
+                        BluetoothAdapter.STATE_OFF -> {
+                            _status.value = BLUETOOTH_STATUS.OFF
+                        }
+
+                        BluetoothAdapter.STATE_TURNING_ON -> {}
+
+                        BluetoothAdapter.STATE_ON -> {
+                            _status.value = BLUETOOTH_STATUS.ON
+                            _pairedDevices.value = if (bluetoothAdapter!!.isEnabled){
+                                bluetoothAdapter.bondedDevices?.filterNotNull()?: emptyList()
+                            }else{
+                                emptyList()
+                            }
+                        }
+
+                        BluetoothAdapter.STATE_TURNING_OFF -> {}
+                    }
+                }
+            }
+        }
         refreshStatus()
     }
 
@@ -56,6 +90,7 @@ class BluetoothUtil_Impl @Inject constructor(
         when (event) {
             Lifecycle.Event.ON_CREATE -> {
                 register(source)
+                context.registerReceiver(bluetoothStateReceiver, IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED))
             }
 
             Lifecycle.Event.ON_START -> {}
@@ -67,7 +102,9 @@ class BluetoothUtil_Impl @Inject constructor(
 
             Lifecycle.Event.ON_PAUSE -> {}
             Lifecycle.Event.ON_STOP -> {}
-            Lifecycle.Event.ON_DESTROY -> {}
+            Lifecycle.Event.ON_DESTROY -> {
+                context.unregisterReceiver(bluetoothStateReceiver)
+            }
             Lifecycle.Event.ON_ANY -> {}
         }
     }
